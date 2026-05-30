@@ -415,6 +415,9 @@ export default function MycaseAnimatedSite() {
   const [customPhone, setCustomPhone] = useState("");
   const [customModel, setCustomModel] = useState("");
   const [customImage, setCustomImage] = useState(null);
+  const [customImageFile, setCustomImageFile] = useState(null);
+  const [customError, setCustomError] = useState("");
+  const [customLoading, setCustomLoading] = useState(false);
 
   const [adminEmail, setAdminEmail] = useState(ADMIN_EMAIL === "admin@example.com" ? "" : ADMIN_EMAIL);
   const [adminPassword, setAdminPassword] = useState("");
@@ -581,9 +584,39 @@ export default function MycaseAnimatedSite() {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank");
   }
 
-  function submitCustomization() {
-    openWhatsApp(`Bonjour Mycase, je souhaite personnaliser une coque.\nNom : ${customName}\nTéléphone : ${customPhone}\nModèle : ${customModel}`);
+  async function submitCustomization() {
+  setCustomError("");
+
+  if (!customName.trim() || !customPhone.trim() || !customModel.trim()) {
+    setCustomError("Complète ton nom, ton téléphone et le modèle du téléphone.");
+    return;
   }
+
+  setCustomLoading(true);
+
+  try {
+    let imageUrl = "";
+
+    if (customImageFile) {
+      imageUrl = await uploadImageToSupabase(customImageFile, "custom-orders");
+    }
+
+    const whatsappMessage = [
+      "Bonjour Mycase, je souhaite personnaliser une coque.",
+      `Nom : ${customName}`,
+      `Téléphone : ${customPhone}`,
+      `Modèle : ${customModel}`,
+      imageUrl ? `Image à utiliser : ${imageUrl}` : "Image : non jointe",
+    ].join("\n");
+
+    openWhatsApp(whatsappMessage);
+    showToast("Demande de personnalisation préparée pour WhatsApp");
+  } catch (error) {
+    setCustomError(`Image non envoyée : ${error.message}`);
+  } finally {
+    setCustomLoading(false);
+  }
+}
 
   function submitCartOrder() {
     const detail = cart.map((item) => `- ${item.name} x${item.quantity} : ${formatPrice(item.price * item.quantity)}`).join("\n");
@@ -1058,11 +1091,41 @@ export default function MycaseAnimatedSite() {
             <label className="group cursor-pointer rounded-[2rem] border-2 border-dashed border-sky-300 bg-sky-50 p-6 text-center transition hover:-translate-y-1 hover:border-sky-500 hover:bg-sky-100">
               <Icon name="upload" className="mx-auto mb-3 h-8 w-8 text-sky-600 transition group-hover:-translate-y-1" />
               <span className="font-black text-sky-700">{customImage ? "Changer l’image" : "Charger une image"}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(event) => readImageFile(event.target.files?.[0], setCustomImage)} />
+              <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                   setCustomImageFile(file || null);
+                  readImageFile(file, setCustomImage);
+               }}
+                />
               {customImage && <img src={customImage} alt="Aperçu personnalisation" className="mt-5 max-h-80 w-full rounded-[1.5rem] object-cover shadow-xl" />}
             </label>
 
-            <button disabled={!formReady} type="button" onClick={submitCustomization} className={`rounded-2xl px-6 py-4 font-black text-white transition ${formReady ? "bg-sky-600 hover:-translate-y-1 hover:bg-sky-700" : "cursor-not-allowed bg-slate-300"}`}>
+            {customError && (
+              <p className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-600">
+                 {customError}
+              </p>
+            )}
+
+              <button
+                 disabled={!formReady || customLoading}
+                  type="button"
+                  onClick={submitCustomization}
+                  className={`rounded-2xl px-6 py-4 font-black text-white transition ${
+                    formReady && !customLoading
+                     ? "bg-sky-600 hover:-translate-y-1 hover:bg-sky-700"
+                     : "cursor-not-allowed bg-slate-300"
+                 }`}
+              >
+                {customLoading
+                   ? "Envoi de l’image…"
+                   : formReady
+                       ? "Envoyer sur WhatsApp"
+                      : "Complète tous les champs"}
+</button>
               {formReady ? "Envoyer sur WhatsApp" : "Complète tous les champs"}
             </button>
           </div>
